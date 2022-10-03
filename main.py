@@ -4,6 +4,7 @@ from weasyprint import HTML, Attachment
 from io import BytesIO
 import base64
 import logging
+from send2trash import send2trash
 logger = logging.getLogger('weasyprint')
 logger.addHandler(logging.FileHandler('weasyprint.log'))
 
@@ -25,6 +26,7 @@ def main():
 
   try:
     convert(filename)
+    send2trash(filename)
   except:
     print("Something went wrong")
 
@@ -74,6 +76,7 @@ def convert(filename):
   # output filename is the same, only extension is different
   pdf_filename = filename.replace(".eml", ".pdf")
   HTML(string=string).write_pdf(target=pdf_filename, attachments=attachments)
+  print('Output file: ' + pdf_filename)
 
 if __name__ == '__main__':
   main()
