@@ -8,16 +8,31 @@ from send2trash import send2trash
 import traceback
 import json
 import datetime
+import sys
 logger = logging.getLogger('weasyprint')
 logger.addHandler(logging.FileHandler('weasyprint.log'))
 
 TEXT_PLAIN = 'text/plain'
 TEXT_HTML = 'text/html'
+RECURSION_LIMIT = 5000
 
 class NamedBytesIO(BytesIO):
   def __init__(self,*args,**kwargs):
     BytesIO.__init__(self, *args)
     self.name = kwargs.get('name')
+
+# Some HTML has multiple nested element, so python catches "RecursionError: maximum recursion depth exceeded in comparison"
+# We need this to increase the limit
+class recursionlimit:
+  def __init__(self, limit):
+      self.limit = limit
+
+  def __enter__(self):
+      self.old_limit = sys.getrecursionlimit()
+      sys.setrecursionlimit(self.limit)
+
+  def __exit__(self, type, value, tb):
+      sys.setrecursionlimit(self.old_limit)
 
 def json_serial(obj):
   if isinstance(obj, datetime.datetime):
@@ -46,6 +61,7 @@ def convert(filename):
   ep = eml_parser.EmlParser(include_raw_body=True, include_attachment_data=True)
   parsed_eml = ep.decode_email_bytes(raw_email)
 
+  # log the json for debug purpose
   with open("json.log", "w") as file:
     file.write(json.dumps(parsed_eml, default=json_serial))
 
@@ -60,6 +76,10 @@ def convert(filename):
   string = bodies.get(TEXT_PLAIN) if bodies.get(TEXT_HTML) == None else bodies.get(TEXT_HTML)
   if (string == None): 
     string = any_content
+  
+  # log the html for debug purpose
+  with open("html.log", "w") as file:
+    file.write(string)
   
   # Parse attachments
   attachments = []
@@ -99,7 +119,8 @@ def convert(filename):
   
   # output filename is the same, only extension is different
   pdf_filename = filename.replace(".eml", ".pdf")
-  HTML(string=string).write_pdf(target=pdf_filename, attachments=attachments)
+  with recursionlimit(RECURSION_LIMIT):
+    HTML(string=string).write_pdf(target=pdf_filename, attachments=attachments)
   print('Output file: ' + pdf_filename)
 
 if __name__ == '__main__':
