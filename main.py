@@ -9,6 +9,7 @@ import traceback
 import json
 import datetime
 import sys
+import html5lib
 logger = logging.getLogger('weasyprint')
 logger.addHandler(logging.FileHandler('weasyprint.log'))
 
@@ -114,8 +115,22 @@ def convert(filename):
           attachments.append(Attachment(file_obj=file))
   
   if len(attachments) > 0: 
-    # the ID attribute in the img tag cause attachments failed to be attached, so we need to replace it with something else.
-    string = string.replace(' id=', ' did=')
+    # the ID attribute in the img tag cause attachments failed to be attached, so we need to delete it
+    # See https://github.com/Kozea/WeasyPrint/issues/1733 
+    # parse HTML
+    elements = html5lib.parse(string, namespaceHTMLElements=False)
+    # find any element with ID attributes and delete the id attribute
+    elements_with_ids = elements.findall('*//*[@id]')
+    for element in elements_with_ids:
+      del element.attrib['id']
+    # produce the new HTML string after removing IDs attributes
+    s = html5lib.serializer.HTMLSerializer()
+    walker = html5lib.getTreeWalker("etree")
+    stream = walker(elements)
+    output = s.serialize(stream)
+    string = ''
+    for item in output:
+      string = string + item
   
   # output filename is the same, only extension is different
   pdf_filename = filename.replace(".eml", ".pdf")

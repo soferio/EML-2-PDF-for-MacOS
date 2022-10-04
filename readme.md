@@ -5,6 +5,7 @@ This project use 3rd party libraries:
 - `easygui`: let users select the input file from a dialog
 - `eml-parser`: parse the EML file for HTML and attachments files
 - `weasyprint`: Convert HTML files and create PDF files with attachments
+- `html5lib`: for editing HTML elements
 - `Send2Trash`: For moving EML file to trash bin. 
 
 

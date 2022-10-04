@@ -1,4 +1,5 @@
 easygui==0.98.3
 eml-parser==1.17.0
+html5lib==1.1
 weasyprint==56.1
 Send2Trash==1.8.0
