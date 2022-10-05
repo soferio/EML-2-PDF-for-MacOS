@@ -6,6 +6,7 @@ This project use 3rd party libraries:
 - `eml-parser`: parse the EML file for HTML and attachments files
 - `weasyprint`: Convert HTML files and create PDF files with attachments
 - `html5lib`: for editing HTML elements
+- `tinycss2`: for editing CSS styles
 - `Send2Trash`: For moving EML file to trash bin. 
 
 

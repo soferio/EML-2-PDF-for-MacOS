@@ -10,6 +10,7 @@ import json
 import datetime
 import sys
 import html5lib
+import tinycss2
 logger = logging.getLogger('weasyprint')
 logger.addHandler(logging.FileHandler('weasyprint.log'))
 
@@ -39,6 +40,10 @@ def json_serial(obj):
   if isinstance(obj, datetime.datetime):
       serial = obj.isoformat()
       return serial
+
+# check if object has attribute <name> with value <value>
+def check_attribute(obj, name, value):
+  return hasattr(obj, name) and getattr(obj, name) == value
 
 def main():
   # User chooses input file 
@@ -118,7 +123,12 @@ def convert(filename):
   toEmails = ', '.join(parsed_eml.get('header').get('to'))
   subject = parsed_eml.get('header').get('subject')
   date = parsed_eml.get('header').get('date').strftime('%-d %B %Y at %-I:%M%p')
-  header = header % (fromEmail, subject, date, toEmails)
+  
+  if len(attachments) > 0:
+    paperclip = 'display: inline-block'  
+  else:
+    paperclip = 'display: none'  
+  header = header % (fromEmail, paperclip, subject, date, toEmails, )
 
   elements = html5lib.parse(string, namespaceHTMLElements=False)
   if len(attachments) > 0: 
@@ -129,7 +139,28 @@ def convert(filename):
     elements_with_ids = elements.findall('*//*[@id]')
     for element in elements_with_ids:
       del element.attrib['id']
-    
+
+  # element with display:inline-block and width:100% can create truncate issue in rendering PDF
+  # here if any element has both of those styles, we remove display:inline-block
+  elements_with_styles = elements.findall('*//*[@style]')
+  for element in elements_with_styles:
+    declarations = tinycss2.parse_declaration_list(element.attrib['style'])
+    found_width_100_percent = False
+    found_display_inline_block = False
+    index = -1
+    for d in declarations:
+      if check_attribute(d, 'name', 'display') and hasattr(d, 'value') and len(d.value) > 0 and check_attribute(d.value[0], 'lower_value', 'inline-block'):
+        found_display_inline_block = True
+      if check_attribute(d, 'name', 'width') and hasattr(d, 'value') and len(d.value) > 0 and check_attribute(d.value[0], 'type', 'percentage') and check_attribute(d.value[0], 'value', 100):
+        found_width_100_percent = True
+      
+    if found_width_100_percent and found_display_inline_block:
+      new_styles = []
+      for d in declarations:
+        if not (hasattr(d, 'name') and d.name == 'display' and len(d.value) > 0 and d.value[0].lower_value == 'inline-block'):
+          new_styles.append(d.serialize())
+      element.attrib['style'] = ';'.join(new_styles)
+
   # insert header to body element
   body_element = elements.find('body') or elements.find('*//body')
   if (body_element != None):
@@ -151,7 +182,7 @@ def convert(filename):
   # log the html for debug purpose
   with open("html.log", "w") as file:
     file.write(string)
-
+  
   # output filename is the same, only extension is different
   pdf_filename = filename.replace(".eml", ".pdf")
   with recursionlimit(RECURSION_LIMIT):
