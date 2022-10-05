@@ -50,7 +50,7 @@ def main():
 
   try:
     convert(filename)
-    # send2trash(filename)
+    send2trash(filename)
   except Exception as e:
     traceback.print_exc()
 
