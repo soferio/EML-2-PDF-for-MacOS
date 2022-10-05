@@ -11,6 +11,9 @@ import datetime
 import sys
 import html5lib
 import tinycss2
+from pathlib import Path
+import os.path
+
 logger = logging.getLogger('weasyprint')
 logger.addHandler(logging.FileHandler('weasyprint.log'))
 
@@ -46,16 +49,38 @@ def check_attribute(obj, name, value):
   return hasattr(obj, name) and getattr(obj, name) == value
 
 def main():
+  # read settings file for recent open path
+  setting_filename = 'settings.txt'
+  current_path = '.'
+  if os.path.isfile(setting_filename):
+    with open(setting_filename, 'r') as file:
+      path = file.readline()
+      if (path == ''):
+        current_path = '.'
+      else:
+        current_path = path
+
   # User chooses input file 
-  filename = easygui.fileopenbox(msg="Please select input file", filetypes=["*.eml"])
+  filename = easygui.fileopenbox(msg="Please select input file", filetypes=["*.eml"], default=current_path + '/*.eml')
 
   # If user does not select any file, just stop here
   if filename == None:
     return
 
+  # Save current path for next use
+  with open(setting_filename, 'w') as file:
+    file.write(str(Path(filename).parent))
+
   try:
-    convert(filename)
-    send2trash(filename)
+    pdf_filename = convert(filename)
+    if easygui.boolbox("""
+    PDF file was generated successfully at: 
+    %s
+
+    Do you want to delete the EML file?
+    """ % pdf_filename, choices=("[D]elete", "[K]eep (Esc)"),):
+      print("EML file is in Trash bin now")
+      send2trash(filename)
   except Exception as e:
     traceback.print_exc()
 
@@ -85,6 +110,7 @@ def convert(filename):
   
   # Parse attachments
   attachments = []
+  attachment_filenames = []
   if (parsed_eml.get('attachment') != None):
     for attachment in parsed_eml.get('attachment'):
       # attachment['raw'] is not actually raw. They are base64 encoded by eml_parser before returning to us.
@@ -115,20 +141,25 @@ def convert(filename):
         if not found_and_replaced:
           file = NamedBytesIO(base64.b64decode(attachment.get('raw')), name=attachment.get('filename'))
           attachments.append(Attachment(file_obj=file))
+          attachment_filenames.append(attachment.get('filename'))
   
   # create a header section to contain to, from, subject and date
   with open("header.html", "r") as file:
     header = file.read()
   fromEmail = parsed_eml.get('header').get('from')
-  toEmails = ', '.join(parsed_eml.get('header').get('to'))
   subject = parsed_eml.get('header').get('subject')
-  date = parsed_eml.get('header').get('date').strftime('%-d %B %Y at %-I:%M%p')
-  
-  if len(attachments) > 0:
-    paperclip = 'display: inline-block'  
+  if parsed_eml.get('header').get('received') != None and len(parsed_eml.get('header').get('received')) > 0:
+    # received date in local time
+    date = parsed_eml.get('header').get('received')[0].get('date').astimezone().strftime('%-d %B %Y at %-I:%M:%S %p')
+  elif parsed_eml.get('header').get('date') != None:
+    # if received date is not available, use sent date
+    date = parsed_eml.get('header').get('date').astimezone().strftime('%-d %B %Y at %-I:%M:%S %p')
   else:
-    paperclip = 'display: none'  
-  header = header % (fromEmail, paperclip, subject, date, toEmails, )
+    date = 'Unknown'
+  toEmails = ', '.join(parsed_eml.get('header').get('to'))
+  attachment_row_display = 'block' if len(attachment_filenames) > 0 else 'none'
+  attachment_filenames = ', '.join(attachment_filenames)
+  header = header % (fromEmail, subject, date, toEmails, attachment_row_display, attachment_filenames)
 
   elements = html5lib.parse(string, namespaceHTMLElements=False)
   if len(attachments) > 0: 
@@ -147,7 +178,6 @@ def convert(filename):
     declarations = tinycss2.parse_declaration_list(element.attrib['style'])
     found_width_100_percent = False
     found_display_inline_block = False
-    index = -1
     for d in declarations:
       if check_attribute(d, 'name', 'display') and hasattr(d, 'value') and len(d.value) > 0 and check_attribute(d.value[0], 'lower_value', 'inline-block'):
         found_display_inline_block = True
@@ -188,6 +218,7 @@ def convert(filename):
   with recursionlimit(RECURSION_LIMIT):
     HTML(string=string).write_pdf(target=pdf_filename, attachments=attachments, stylesheets=[CSS('stylesheets.css')])
   print('Output file: ' + pdf_filename)
+  return pdf_filename
 
 if __name__ == '__main__':
   main()
