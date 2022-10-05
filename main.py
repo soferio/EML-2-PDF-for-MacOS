@@ -1,6 +1,6 @@
 import eml_parser
 import easygui
-from weasyprint import HTML, Attachment
+from weasyprint import HTML, Attachment, CSS
 from io import BytesIO
 import base64
 import logging
@@ -50,7 +50,7 @@ def main():
 
   try:
     convert(filename)
-    send2trash(filename)
+    # send2trash(filename)
   except Exception as e:
     traceback.print_exc()
 
@@ -78,10 +78,6 @@ def convert(filename):
   if (string == None): 
     string = any_content
   
-  # log the html for debug purpose
-  with open("html.log", "w") as file:
-    file.write(string)
-  
   # Parse attachments
   attachments = []
   if (parsed_eml.get('attachment') != None):
@@ -101,7 +97,8 @@ def convert(filename):
           # content type is like: image/png; name="image001.png"
           # we don't need the name after ;
           content_type = attachment.get('content_header').get('content-type')[0]
-          content_type = content_type[:content_type.index(';')] 
+          if (';' in  content_type): 
+            content_type = content_type[:content_type.index(';')] 
           
           # find and replace 
           if (content_id != None and find in string and content_type):
@@ -114,28 +111,51 @@ def convert(filename):
           file = NamedBytesIO(base64.b64decode(attachment.get('raw')), name=attachment.get('filename'))
           attachments.append(Attachment(file_obj=file))
   
+  # create a header section to contain to, from, subject and date
+  with open("header.html", "r") as file:
+    header = file.read()
+  fromEmail = parsed_eml.get('header').get('from')
+  toEmails = ', '.join(parsed_eml.get('header').get('to'))
+  subject = parsed_eml.get('header').get('subject')
+  date = parsed_eml.get('header').get('date').strftime('%-d %B %Y at %-I:%M%p')
+  header = header % (fromEmail, subject, date, toEmails)
+
+  elements = html5lib.parse(string, namespaceHTMLElements=False)
   if len(attachments) > 0: 
     # the ID attribute in the img tag cause attachments failed to be attached, so we need to delete it
     # See https://github.com/Kozea/WeasyPrint/issues/1733 
-    # parse HTML
-    elements = html5lib.parse(string, namespaceHTMLElements=False)
+    # parse HTML  
     # find any element with ID attributes and delete the id attribute
     elements_with_ids = elements.findall('*//*[@id]')
     for element in elements_with_ids:
       del element.attrib['id']
-    # produce the new HTML string after removing IDs attributes
-    s = html5lib.serializer.HTMLSerializer()
-    walker = html5lib.getTreeWalker("etree")
-    stream = walker(elements)
-    output = s.serialize(stream)
+    
+  # insert header to body element
+  body_element = elements.find('body') or elements.find('*//body')
+  if (body_element != None):
+    header_elements = html5lib.parse(header, namespaceHTMLElements=False)
+    body_element.insert(0, header_elements)
+
+  # produce the new HTML string after removing IDs attributes
+  s = html5lib.serializer.HTMLSerializer()
+  walker = html5lib.getTreeWalker("etree")
+  stream = walker(elements)
+  output = s.serialize(stream)
+  if (body_element == None):
+    string = header
+  else:
     string = ''
-    for item in output:
-      string = string + item
-  
+  for item in output:
+    string = string + item
+
+  # log the html for debug purpose
+  with open("html.log", "w") as file:
+    file.write(string)
+
   # output filename is the same, only extension is different
   pdf_filename = filename.replace(".eml", ".pdf")
   with recursionlimit(RECURSION_LIMIT):
-    HTML(string=string).write_pdf(target=pdf_filename, attachments=attachments)
+    HTML(string=string).write_pdf(target=pdf_filename, attachments=attachments, stylesheets=[CSS('stylesheets.css')])
   print('Output file: ' + pdf_filename)
 
 if __name__ == '__main__':
