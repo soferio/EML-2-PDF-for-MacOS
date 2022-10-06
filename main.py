@@ -242,6 +242,8 @@ def convert(filename, pdf_filename):
       element.attrib['style'] = ';'.join(new_styles)
 
   # insert header to first child body element if possible
+  # we don't insert to body element because in some emails the first element is a page. 
+  # so anything we put before the first element will push the first element to the 2nd page. 
   header_inserted = False
   body_element = elements.find('body') or elements.find('*//body')
   if (body_element != None):
