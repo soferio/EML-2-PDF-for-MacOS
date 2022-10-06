@@ -241,18 +241,22 @@ def convert(filename, pdf_filename):
           new_styles.append(d.serialize())
       element.attrib['style'] = ';'.join(new_styles)
 
-  # insert header to body element
+  # insert header to first child body element if possible
+  header_inserted = False
   body_element = elements.find('body') or elements.find('*//body')
   if (body_element != None):
     header_elements = html5lib.parse(header, namespaceHTMLElements=False)
-    body_element.insert(0, header_elements)
+    for child in body_element:
+      child.insert(0, header_elements)
+      header_inserted = True
+      break
 
   # produce the new HTML string after removing IDs attributes
   s = html5lib.serializer.HTMLSerializer()
   walker = html5lib.getTreeWalker("etree")
   stream = walker(elements)
   output = s.serialize(stream)
-  if (body_element == None):
+  if not header_inserted:
     string = header
   else:
     string = ''
