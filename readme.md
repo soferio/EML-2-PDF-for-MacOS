@@ -15,6 +15,11 @@ On MacOs, please run this command to install dependencies for `weasyprint`
 brew install python pango libffi
 ```
 
+Please run this command to install `python-tk`, a dependency of `easygui`
+```
+brew install python-tk
+```
+
 Then from the base directory of the project, please run this to create a virtual env:
 ```
 python3 -m venv .venv

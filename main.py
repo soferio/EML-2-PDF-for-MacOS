@@ -13,6 +13,7 @@ import html5lib
 import tinycss2
 from pathlib import Path
 import os.path
+import html
 
 logger = logging.getLogger('weasyprint')
 logger.addHandler(logging.FileHandler('weasyprint.log'))
@@ -71,8 +72,18 @@ def main():
   with open(setting_filename, 'w') as file:
     file.write(str(Path(filename).parent))
 
+  # output filename is the same, only extension is different
+  pdf_filename = filename.replace(".eml", ".pdf")
+  if os.path.isfile(pdf_filename):
+    if easygui.boolbox("A PDF file with this name already exists, do you want to replace existing file?", 
+      choices=("[Y]es", "[N]o (Esc)"),):
+      perform_conversion(filename, pdf_filename)
+  else:
+    perform_conversion(filename, pdf_filename)
+
+def perform_conversion(filename, pdf_filename):
   try:
-    pdf_filename = convert(filename)
+    pdf_filename = convert(filename, pdf_filename)
     if easygui.boolbox("""
     PDF file was generated successfully at: 
     %s
@@ -84,7 +95,7 @@ def main():
   except Exception as e:
     traceback.print_exc()
 
-def convert(filename):
+def convert(filename, pdf_filename):
   # Decode input file
   with open(filename, 'rb') as file:
     raw_email = file.read()
@@ -146,9 +157,20 @@ def convert(filename):
   # create a header section to contain to, from, subject and date
   with open("header.html", "r") as file:
     header = file.read()
-  fromEmail = parsed_eml.get('header').get('from')
-  subject = parsed_eml.get('header').get('subject')
-  if parsed_eml.get('header').get('received') != None and len(parsed_eml.get('header').get('received')) > 0:
+  
+  # From section
+  from_email = parsed_eml.get('header').get('from')
+  # if there is header, use header because there is name of email address there
+  if (parsed_eml.get('header').get('header') != None 
+      and parsed_eml.get('header').get('header').get('from') 
+      and len(parsed_eml.get('header').get('header').get('from')) > 0):
+    from_email = html.escape(parsed_eml.get('header').get('header').get('from')[0])
+
+  subject = html.escape(parsed_eml.get('header').get('subject'))
+
+  # Date section
+  if (parsed_eml.get('header').get('received') != None 
+    and len(parsed_eml.get('header').get('received')) > 0):
     # received date in local time
     date = parsed_eml.get('header').get('received')[0].get('date').astimezone().strftime('%-d %B %Y at %-I:%M:%S %p')
   elif parsed_eml.get('header').get('date') != None:
@@ -156,10 +178,38 @@ def convert(filename):
     date = parsed_eml.get('header').get('date').astimezone().strftime('%-d %B %Y at %-I:%M:%S %p')
   else:
     date = 'Unknown'
-  toEmails = ', '.join(parsed_eml.get('header').get('to'))
-  attachment_row_display = 'block' if len(attachment_filenames) > 0 else 'none'
+
+  # To section
+  to_emails = ', '.join(parsed_eml.get('header').get('to'))
+  if (parsed_eml.get('header').get('header') != None 
+      and parsed_eml.get('header').get('header').get('to') 
+      and len(parsed_eml.get('header').get('header').get('to')) > 0):
+    to_emails = html.escape(parsed_eml.get('header').get('header').get('to')[0])
+
+  # CC section
+  display_cc = parsed_eml.get('header').get('cc') != None and len(parsed_eml.get('header').get('cc')) > 0
+  cc_row_display = 'table-row' if display_cc else 'none'
+  cc_emails = ''
+  if (display_cc):
+    cc_emails = ', '.join(parsed_eml.get('header').get('cc'))
+    # if there is header, use header because there is name of email address there
+    if (parsed_eml.get('header').get('header') != None 
+        and parsed_eml.get('header').get('header').get('cc') 
+        and len(parsed_eml.get('header').get('header').get('cc')) > 0):
+      cc_emails = html.escape(parsed_eml.get('header').get('header').get('cc')[0])
+
+  # BCC section
+  display_bcc = parsed_eml.get('header').get('header').get('bcc') != None and len(parsed_eml.get('header').get('header').get('bcc')) > 0
+  bcc_row_display = 'table-row' if display_bcc else 'none'
+  bcc_emails = ''
+  if (parsed_eml.get('header').get('header') != None 
+      and parsed_eml.get('header').get('header').get('bcc') 
+      and len(parsed_eml.get('header').get('header').get('bcc')) > 0):
+    bcc_emails = html.escape(parsed_eml.get('header').get('header').get('bcc')[0])
+
+  attachment_row_display = 'table-row' if len(attachment_filenames) > 0 else 'none'
   attachment_filenames = ', '.join(attachment_filenames)
-  header = header % (fromEmail, subject, date, toEmails, attachment_row_display, attachment_filenames)
+  header = header % (from_email, subject, date, to_emails, cc_row_display, cc_emails, bcc_row_display, bcc_emails, attachment_row_display, attachment_filenames)
 
   elements = html5lib.parse(string, namespaceHTMLElements=False)
   if len(attachments) > 0: 
@@ -213,12 +263,8 @@ def convert(filename):
   with open("html.log", "w") as file:
     file.write(string)
   
-  # output filename is the same, only extension is different
-  pdf_filename = filename.replace(".eml", ".pdf")
   with recursionlimit(RECURSION_LIMIT):
     HTML(string=string).write_pdf(target=pdf_filename, attachments=attachments, stylesheets=[CSS('stylesheets.css')])
-  print('Output file: ' + pdf_filename)
-  return pdf_filename
 
 if __name__ == '__main__':
   main()
