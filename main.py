@@ -95,34 +95,36 @@ def perform_conversion(filename, pdf_filename):
   except Exception as e:
     traceback.print_exc()
 
-def convert(filename, pdf_filename):
-  # Decode input file
-  with open(filename, 'rb') as file:
-    raw_email = file.read()
-  
-  ep = eml_parser.EmlParser(include_raw_body=True, include_attachment_data=True)
-  parsed_eml = ep.decode_email_bytes(raw_email)
+def parse_attachments(parsed_eml, ep, body):
+  """
+  Parse eml for attachments and replace images in the body with attached images 
+  Arguments:
+      parsed_eml: parsed result of the email
+      ep: parser
+      body: body content of he email
+  Returns:
+      attachments: list of Attachment object
+      attachment_filenames: list of attachment filenames
+      body: new content body
+  """
 
-  # log the json for debug purpose
-  with open("json.log", "w") as file:
-    file.write(json.dumps(parsed_eml, default=json_serial))
-
-  # Parse body
-  bodies = {}
-  any_content = None
-  for body in parsed_eml['body']:
-    if (body.get('content_type') != None):
-      bodies[body.get('content_type')] = body.get('content')
-    else:
-      any_content = body.get('content')
-  string = bodies.get(TEXT_PLAIN) if bodies.get(TEXT_HTML) == None else bodies.get(TEXT_HTML)
-  if (string == None): 
-    string = any_content
-  
   # Parse attachments
   attachments = []
   attachment_filenames = []
   if (parsed_eml.get('attachment') != None):
+    # parse nested emails for content_id of nested attachments
+    # so that we knows which attachments are for nested emails, then we don't include those attachments in the main email
+    nested_content_ids = []
+    for attachment in parsed_eml.get('attachment'):
+      content_type = attachment.get('content_header').get('content-type')[0]
+      if content_type.lower().startswith('message/rfc822'):
+        nested_raw_email = base64.b64decode(attachment.get('raw'))
+        nested_parsed_eml = ep.decode_email_bytes(nested_raw_email)
+        for nested_attachment in nested_parsed_eml.get('attachment'):
+          if (nested_attachment.get('content_header').get('content-id') 
+              and len(nested_attachment.get('content_header').get('content-id')) > 0):
+            nested_content_ids = nested_content_ids + nested_attachment.get('content_header').get('content-id')
+
     for attachment in parsed_eml.get('attachment'):
       # attachment['raw'] is not actually raw. They are base64 encoded by eml_parser before returning to us.
       if (
@@ -132,28 +134,48 @@ def convert(filename, pdf_filename):
         found_and_replaced = False
         if (attachment.get('content_header').get('content-id') != None 
             and attachment.get('content_header').get('content-id')[0] != None):
-          # find the content ID in the form cid:CONTENT_ID and replace it with base64 representation of the images
-          content_id = attachment.get('content_header').get('content-id')[0][1:-1] 
-          find = 'cid:' + content_id
-          
-          # content type is like: image/png; name="image001.png"
-          # we don't need the name after ;
-          content_type = attachment.get('content_header').get('content-type')[0]
-          if (';' in  content_type): 
-            content_type = content_type[:content_type.index(';')] 
-          
-          # find and replace 
-          if (content_id != None and find in string and content_type):
-            repl = 'data:' + content_type + ';base64,' + attachment.get('raw').decode()
-            string = string.replace(find, repl)
+          if (attachment.get('content_header').get('content-id')[0] in nested_content_ids):
             found_and_replaced = True
+          else:
+            # find the content ID in the form cid:CONTENT_ID and replace it with base64 representation of the images
+            content_id = attachment.get('content_header').get('content-id')[0][1:-1] 
+            find = 'cid:' + content_id
+            
+            # content type is like: image/png; name="image001.png"
+            # we don't need the name after ;
+            content_type = attachment.get('content_header').get('content-type')[0]
+            if (';' in  content_type): 
+              content_type = content_type[:content_type.index(';')] 
+            
+            # find and replace 
+            if (content_id != None and find in body and content_type):
+              repl = 'data:' + content_type + ';base64,' + attachment.get('raw').decode()
+              body = body.replace(find, repl)
+              found_and_replaced = True
 
-        # Only attach file if it was not placed somewhere in html
+        # Only attach file if it was not placed somewhere in html or in nested emails
         if not found_and_replaced:
-          file = NamedBytesIO(base64.b64decode(attachment.get('raw')), name=attachment.get('filename'))
+          attachment_filename = attachment.get('filename')
+          content_type = attachment.get('content_header').get('content-type')[0]
+          # when the attachment is an email but the filename does not contain an extension
+          if content_type.lower().startswith('message/rfc822') and '.' not in attachment_filename:
+            attachment_filename = 'Mail Attachment.eml'
+
+          file = NamedBytesIO(base64.b64decode(attachment.get('raw')), name=attachment_filename)
           attachments.append(Attachment(file_obj=file))
-          attachment_filenames.append(attachment.get('filename'))
-  
+          attachment_filenames.append(attachment_filename)
+  return [attachments, attachment_filenames, body]
+
+def generate_header(parsed_eml, attachment_filenames):
+  """
+  Generate the header section contain to/from/cc/bcc/subject/attachments
+  Arguments:
+      parsed_eml: parsed result of the email
+      attachment_filenames: list of attachment filenames
+  Returns:
+      HTML string of the header 
+  """
+
   # create a header section to contain to, from, subject and date
   with open("header.html", "r") as file:
     header = file.read()
@@ -210,13 +232,41 @@ def convert(filename, pdf_filename):
   attachment_row_display = 'table-row' if len(attachment_filenames) > 0 else 'none'
   attachment_filenames = ', '.join(attachment_filenames)
   header = header % (from_email, subject, date, to_emails, cc_row_display, cc_emails, bcc_row_display, bcc_emails, attachment_row_display, attachment_filenames)
+  return header
 
-  elements = html5lib.parse(string, namespaceHTMLElements=False)
+def convert(filename, pdf_filename):
+  # Decode input file
+  with open(filename, 'rb') as file:
+    raw_email = file.read()
+  
+  ep = eml_parser.EmlParser(include_raw_body=True, include_attachment_data=True)
+  parsed_eml = ep.decode_email_bytes(raw_email)
+
+  # log the json for debug purpose
+  with open("json.log", "w") as file:
+    file.write(json.dumps(parsed_eml, default=json_serial))
+  
+  # Parse body
+  bodies = {}
+  any_content = None
+  for body in parsed_eml['body']:
+    if (body.get('content_type') != None):
+      if (bodies.get(body.get('content_type')) == None): # only accept the first of each content_type if there are multiple
+        bodies[body.get('content_type')] = body.get('content')
+    else:
+      any_content = body.get('content')
+  content_string = bodies.get(TEXT_PLAIN) if bodies.get(TEXT_HTML) == None else bodies.get(TEXT_HTML)
+  if (content_string == None): 
+    content_string = any_content
+
+  attachments, attachment_filenames, content_string = parse_attachments(parsed_eml, ep, content_string)
+  header = generate_header(parsed_eml, attachment_filenames)
+
+  elements = html5lib.parse(content_string, namespaceHTMLElements=False)
   if len(attachments) > 0: 
     # the ID attribute in the img tag cause attachments failed to be attached, so we need to delete it
     # See https://github.com/Kozea/WeasyPrint/issues/1733 
-    # parse HTML  
-    # find any element with ID attributes and delete the id attribute
+    # parse HTML to find any element with ID attributes and delete the id attribute
     elements_with_ids = elements.findall('*//*[@id]')
     for element in elements_with_ids:
       del element.attrib['id']
@@ -250,6 +300,8 @@ def convert(filename, pdf_filename):
     header_elements = html5lib.parse(header, namespaceHTMLElements=False)
     for child in body_element:
       child.insert(0, header_elements)
+      # if there is text in child, we want the header element to stay before the text
+      header_elements.tail, child.text = child.text, None
       header_inserted = True
       break
 
@@ -259,18 +311,18 @@ def convert(filename, pdf_filename):
   stream = walker(elements)
   output = s.serialize(stream)
   if not header_inserted:
-    string = header
+    content_string = header
   else:
-    string = ''
+    content_string = ''
   for item in output:
-    string = string + item
+    content_string = content_string + item
 
   # log the html for debug purpose
   with open("html.log", "w") as file:
-    file.write(string)
+    file.write(content_string)
   
   with recursionlimit(RECURSION_LIMIT):
-    HTML(string=string).write_pdf(target=pdf_filename, attachments=attachments, stylesheets=[CSS('stylesheets.css')])
+    HTML(string=content_string).write_pdf(target=pdf_filename, attachments=attachments, stylesheets=[CSS('stylesheets.css')])
 
 if __name__ == '__main__':
   main()
