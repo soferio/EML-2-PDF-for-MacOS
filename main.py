@@ -62,38 +62,51 @@ def main():
         current_path = path
 
   # User chooses input file 
-  filename = easygui.fileopenbox(msg="Please select input file", filetypes=["*.eml"], default=current_path + '/*.eml')
+  filenames = easygui.fileopenbox(msg="Please select input file", filetypes=["*.eml"], default=current_path + '/*.eml', multiple=True)
 
   # If user does not select any file, just stop here
-  if filename == None:
+  if filenames == None:
     return
 
   # Save current path for next use
   with open(setting_filename, 'w') as file:
-    file.write(str(Path(filename).parent))
+    file.write(str(Path(filenames[0]).parent))
 
   # output filename is the same, only extension is different
-  pdf_filename = filename.replace(".eml", ".pdf")
-  if os.path.isfile(pdf_filename):
-    if easygui.boolbox("A PDF file with this name already exists, do you want to replace existing file?", 
-      choices=("[Y]es", "[N]o (Esc)"),):
-      perform_conversion(filename, pdf_filename)
+  exists = False
+  for filename in filenames:
+    pdf_filename = filename.replace(".eml", ".pdf")
+    if os.path.isfile(pdf_filename):
+      exists = True
+      break
+  
+  if exists:
+    if easygui.boolbox("Some PDF files exist, do you want to replace existing files?", 
+        choices=("[Y]es", "[N]o (Esc)"),):
+        perform_conversion(filenames)
   else:
-    perform_conversion(filename, pdf_filename)
+    perform_conversion(filenames)
 
-def perform_conversion(filename, pdf_filename):
-  try:
-    pdf_filename = convert(filename, pdf_filename)
-    if easygui.boolbox("""
-    PDF file was generated successfully at: 
-    %s
+def perform_conversion(filenames):
+  failed_filenames = []
+  for filename in filenames:
+    try:
+      convert(filename)    
+    except Exception as e:
+      failed_filenames.append(filename)
+      traceback.print_exc()
+  message = 'All files were converted successfully!'
+  if len(failed_filenames) > 0:
+    message = 'These files have issues during conversion to PDF:\n\n\t%s' % ('\n\t'.join(failed_filenames))
 
-    Do you want to delete the EML file?
-    """ % pdf_filename, choices=("[D]elete", "[K]eep (Esc)"),):
+  if (easygui.boolbox("""
+    %s\n
+    Do you want to delete the EML files?
+  """ % message, choices=("[D]elete", "[K]eep (Esc)"),)):
       print("EML file is in Trash bin now")
-      send2trash(filename)
-  except Exception as e:
-    traceback.print_exc()
+      for filename in filenames:
+        if filename not in failed_filenames:
+          send2trash(filename)
 
 def parse_attachments(parsed_eml, ep, body):
   """
@@ -234,7 +247,7 @@ def generate_header(parsed_eml, attachment_filenames):
   header = header % (from_email, subject, date, to_emails, cc_row_display, cc_emails, bcc_row_display, bcc_emails, attachment_row_display, attachment_filenames)
   return header
 
-def convert(filename, pdf_filename):
+def convert(filename):
   # Decode input file
   with open(filename, 'rb') as file:
     raw_email = file.read()
@@ -320,7 +333,7 @@ def convert(filename, pdf_filename):
   # log the html for debug purpose
   with open("html.log", "w") as file:
     file.write(content_string)
-  
+  pdf_filename = filename.replace(".eml", ".pdf")
   with recursionlimit(RECURSION_LIMIT):
     HTML(string=content_string).write_pdf(target=pdf_filename, attachments=attachments, stylesheets=[CSS('stylesheets.css')])
 

@@ -42,3 +42,18 @@ Please run the following command from the base directory of the project:
 ```
 python3 main.py
 ```
+
+Create a shortcut in Desktop 
+===============================================
+To create a shortcut to run the script in MacOs, first we need to grant the execute permission to the file `start.command` by running:
+```
+chmod +x ./start.command
+```
+
+Then in Finder, please right click on `start.command` file and select `Make Alias`. Then we can copy the alias file anywhere (such as Desktop) or rename it to anything. 
+Double click on the alias file or the `start.command` file will run the script in virtual environment.
+
+The script will run inside a terminal windows. After finish running, if the terminal windows is not closed, then we can configure the terminal to close. To configure the terminal to close after finish running, we need to:
+- Open Terminal 
+- Go to Menu Terminal -> Preferences...
+- Then in tab Shell, in "When the shell exists:", we select "Close if the shell exited cleanly". 
