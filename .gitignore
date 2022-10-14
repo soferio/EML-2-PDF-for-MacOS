@@ -1,5 +1,6 @@
 .DS_Store
 .venv/
-*.log
+log/
 .vscode/
 settings.txt
+__pycache__/
