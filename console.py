@@ -25,13 +25,15 @@ for filename in args.filenames:
 
 if not exists or args.forceWrite:
   failed_filenames = []
+  converted_filenames = []
   success_filenames = []
   for filename in args.filenames:
     try:
       if os.path.exists(filename):
         file_extension = os.path.splitext(filename)[1]
         if file_extension.lower() == ".eml":
-          pdf_filename = convert(filename)    
+          pdf_filename = convert(filename)  
+          converted_filenames.append(filename)  
           success_filenames.append('"' + pdf_filename + '"')
       else: 
         print("File " + filename + ' does not exist')
@@ -45,9 +47,8 @@ if not exists or args.forceWrite:
     message = 'These files have issues during conversion to PDF:\n\n\t%s' % ('\n\t'.join(failed_filenames))
 
   if args.delete:
-    for filename in args.filenames:
-      if filename not in failed_filenames:
-        send2trash(filename)
+    for filename in converted_filenames:
+      send2trash(filename)
   
   if args.openPdf:
     os.system("open " + " ".join(success_filenames))
