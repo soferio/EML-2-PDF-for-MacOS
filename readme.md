@@ -96,3 +96,19 @@ chmod +x ./watch.command
 4. Then click on the the Current User on the left panel. On the right panel, we click on `Login Items` tab. 
 4. In `Login Items` tab, click on the '+' button to add a new item to run when login. 
 5. Navigate to and select `watch.command` file. 
+
+Setup Quick Action to convert EML to PDF in Finder
+===================================================
+1. Open Automator. Select "New Document".
+2. Choose "Quick Action" as type for new document.
+3. In `Workflow receives current` box, we change to `files or folders`
+4. Then we drag `Run Shell Script` action from the left panel to the right panel (where we see the text "Drag actions or files here to build your workflow")
+5. In the `Run Shell Script`, we change `Pass input` to `as arguments` and place the content of the script (replace PATH_TO_EML_PDF_PROJECT with the real path)
+```
+cd PATH_TO_EML_PDF_PROJECT
+source .venv/bin/activate
+python3 console.py $@ -f -o -d
+```
+6. Save the Quick Action and give it a name. Now it will be saved to `~/Library/Services`. 
+7. From now, in Finder, when we right click after select one or multiple EML files in Finder, a new menuitem (with the same name that we saved the workflow) will appear. Clicking on the menuitem will convert the selected files to PDF files. The script only converts EML files and ignore other files types. 
+8. If we don't want to use the Quick Action more, we can delete it from `~/Library/Services`. After we delete it, it won't appear in Finder. 
