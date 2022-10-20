@@ -67,33 +67,32 @@ python console.py -h
 
 A help message will appear like this:
 ```
-usage: python console.py [-h] [-d] [-f] [-o] eml_files [eml_files ...]
+usage: python console.py [-h] [-d] [-f] [-o] [-w directory] [eml_files ...]
 
 Convert EML to PDF.
 
 positional arguments:
-  eml_files     EML filenames
+  eml_files             EML filenames
 
 options:
-  -h, --help    show this help message and exit
-  -d, --delete  Keep the EML files after conversion (default: NO)
-  -f, --force   Overwrite existing PDF files (default: NO)
-  -o, --open    Open the PDF files after conversion (default: NO)
+  -h, --help            show this help message and exit
+  -d, --delete          Keep the EML files after conversion (default: NO)
+  -f, --force           Overwrite existing PDF files (default: NO)
+  -o, --open            Open the PDF files after conversion (default: NO)
+  -w directory, --watch directory
+                        Watch a directory and all subdirectories of it for EML files
 ```
 
-Setup Folder Action in Automator 
+Setup Watcher on Login
 ====================================
-1. Open Automator. Select "New Document".
-2. Choose "Folder Action" as type. Folder Actions are workflows that are attached to a folder in the Finder. Items added to the folder cause the workflow to run and are used as input to the workflow
-3. In the workflow editor, select the folder the will receive EML files. 
-4. Add a "Run Shell Script" action to the workflow. 
-5. In the Run Shell Script action the we added, enter the script below. Here '$@' is a way that we pass multiple filename to the python scripts. We should change `<PATH TO EML_PDF FOLDER>` with the actual path to the project. 
+1. First we need to edit `watch.command` file to specify the directory we need to watch.
+ Just replace `EML_DIRECTORY` with the path of your EML directory.
+Then we grant the execution permission on the file `watch.command` by running:
 ```
-#!/bin/sh
-cd <PATH TO EML_PDF FOLDER>
-source .venv/bin/activate
-python3 console.py $@ -f -o -d
+chmod +x ./watch.command
 ```
-
-6. In the Run Shell Script action the we added, in the "Pass Input" select box, change to value from `To Stdin` to `As arguments`.
-7. Save the workflow. Normally the work flow will be saved to `~/Library/Workflows/Applications/Folder Actions`
+2. Go to System Preferences -> "Users & Groups".
+3. Click on the Lock button on lower corner to change settings.
+4. Then click on the the Current User on the left panel. On the right panel, we click on `Login Items` tab. 
+4. In `Login Items` tab, click on the '+' button to add a new item to run when login. 
+5. Navigate to and select `watch.command` file. 

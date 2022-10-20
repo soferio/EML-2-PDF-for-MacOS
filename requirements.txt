@@ -4,3 +4,4 @@ html5lib==1.1
 tinycss2==1.1.1
 weasyprint==56.1
 Send2Trash==1.8.0
+watchdog==2.1.9
