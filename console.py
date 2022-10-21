@@ -14,9 +14,6 @@ logger.setLevel(logging.INFO)
 handler = logging.StreamHandler(sys.stdout)
 handler.setFormatter(formatter)
 logger.addHandler(handler)
-handler = logging.FileHandler('log/console.txt')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
 
 def dir_path(path):
   if os.path.isdir(path):
@@ -45,7 +42,7 @@ def process_files(filenames):
     if file_extension.lower() == ".eml":
       try:
         if os.path.exists(filename):
-          pdf_filename = convert(filename)  
+          pdf_filename = convert(filename, args.logFile)  
           converted_filenames.append(filename)  
           success_filenames.append('"' + pdf_filename + '"')
         else: 
@@ -108,9 +105,18 @@ parser.add_argument('-f', '--force', dest='forceWrite', action='store_true',
                     help='Overwrite existing PDF files (default: NO)')
 parser.add_argument('-o', '--open', dest='openPdf', action='store_true',
                     help='Open the PDF files after conversion (default: NO)')
+parser.add_argument('-l', '--log', dest='logFile', action='store_true',
+                    help='Store output to a log file (default: NO)')
 parser.add_argument('-w', '--watch', dest='watch', type=dir_path, default=None, metavar='directory',
                     help='Watch a directory and all subdirectories of it for EML files')
 args = parser.parse_args()
+
+if (args.logFile):
+  if not os.path.exists('log'):
+    os.makedirs('log')
+  handler = logging.FileHandler('log/console.txt')
+  handler.setFormatter(formatter)
+  logger.addHandler(handler)
 
 if len(args.filenames) == 0 and args.watch == None:
   parser.error('Please specify filenames to convert or a directory to watch')

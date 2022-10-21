@@ -79,6 +79,7 @@ options:
   -d, --delete          Keep the EML files after conversion (default: NO)
   -f, --force           Overwrite existing PDF files (default: NO)
   -o, --open            Open the PDF files after conversion (default: NO)
+  -l, --log             Store output to a log file (default: NO)
   -w directory, --watch directory
                         Watch a directory and all subdirectories of it for EML files
 ```

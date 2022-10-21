@@ -188,12 +188,13 @@ def generate_header(parsed_eml, attachment_filenames):
   header = header % (from_email, subject, date, to_emails, cc_row_display, cc_emails, bcc_row_display, bcc_emails, attachment_row_display, attachment_filenames)
   return header
 
-def convert(filename):
-  if not os.path.exists('log'):
-    os.makedirs('log')
+def convert(filename, log=False):
+  if log:
+    if not os.path.exists('log'):
+      os.makedirs('log')
 
-  logger = logging.getLogger('weasyprint')
-  logger.addHandler(logging.FileHandler('log/weasyprint.log'))
+    logger = logging.getLogger('weasyprint')
+    logger.addHandler(logging.FileHandler('log/weasyprint.log'))
 
   # Decode input file
   with open(filename, 'rb') as file:
@@ -202,9 +203,10 @@ def convert(filename):
   ep = eml_parser.EmlParser(include_raw_body=True, include_attachment_data=True)
   parsed_eml = ep.decode_email_bytes(raw_email)
 
-  # log the json for debug purpose
-  with open("log/json.json", "w") as file:
-    file.write(json.dumps(parsed_eml, default=json_serial))
+  if log:
+    # log the json for debug purpose
+    with open("log/json.json", "w") as file:
+      file.write(json.dumps(parsed_eml, default=json_serial))
   
   # Parse body
   bodies = {}
@@ -292,9 +294,10 @@ def convert(filename):
     for item in output:
       content_string = content_string + item
 
-  # log the html for debug purpose
-  with open("log/html.html", "w") as file:
-    file.write(content_string)
+  if log:
+    # log the html for debug purpose
+    with open("log/html.html", "w") as file:
+      file.write(content_string)
   file_witout_extension = os.path.splitext(filename)[0]
   pdf_filename = file_witout_extension + '.pdf'
   with RecursionLimit(RECURSION_LIMIT):
