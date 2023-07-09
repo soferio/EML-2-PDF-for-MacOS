@@ -25,6 +25,9 @@ On Apple Silicon, there can be some difficulty with "gobject". If so, Then the s
 https://stackoverflow.com/questions/69097224/gobject-2-0-0-not-able-to-load-on-macbook
 ```
 
+On MacOS Also sometimes need to Give Terminal and Finder full disk access
+- Google how to to do this, but inside security/privacy
+
 Then from the base directory of the project, please run this to create a virtual env:
 ```
 python3 -m venv .venv
