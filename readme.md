@@ -1,3 +1,11 @@
+THIS PROJECT IS A PYTHON PROGRAM TO ENABLE CONVERSION OF EML FILES TO PDF FILES ON A MAC.
+
+There are also instructions below about how to add a 'quick action' to your 'right mouse' menu. I use it every day, and it works great, but no liability taken.
+
+===============================================
+
+It was developed for Soferio Pty Ltd by a brilliant Upwork developer, and we are hereby open sourcing it. Pull requests are welcome.
+
 Requirements
 ===============================================
 This project use 3rd party libraries:
